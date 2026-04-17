@@ -143,6 +143,10 @@
   </div>
 </div>
 
+<script>
+  window._walletQueue = false;
+  window.openWalletModal = function() { window._walletQueue = true; };
+</script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

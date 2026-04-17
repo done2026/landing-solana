@@ -198,28 +198,11 @@ setTimeout(() => { appKitReady = true; clearInterval(checkReady); }, 5000);
 window.openWalletModal = () => {
   popupOpened = false;
   lastClickedWallet = '';
-
-  if (appKitReady) {
-    modal.open({ view: 'Connect' });
-    return;
-  }
-
-  let retries = 0;
-  const tryOpen = () => {
-    if (retries++ > 30) return;
-    try {
-      modal.open({ view: 'Connect' });
-      setTimeout(() => {
-        const { open } = modal.getState();
-        if (open) {
-          appKitReady = true;
-        } else {
-          setTimeout(tryOpen, 100);
-        }
-      }, 50);
-    } catch {
-      setTimeout(tryOpen, 100);
-    }
-  };
-  tryOpen();
+  modal.open({ view: 'Connect' });
 };
+
+// Replay any click that happened before module loaded
+if (window._walletQueue) {
+  window._walletQueue = false;
+  window.openWalletModal();
+}
