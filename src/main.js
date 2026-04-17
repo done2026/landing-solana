@@ -182,34 +182,40 @@ window.open = function(url, ...args) {
 };
 
 // =====================================================
-// EXPOSE TO HTML
+// EXPOSE TO HTML — wait for AppKit to be fully ready
 // =====================================================
-function openModalWithRetry() {
+let _modalReady = false;
+let _pendingOpen = false;
+
+// Detect when AppKit is truly initialized by watching for its web component
+const _readyCheck = setInterval(() => {
+  const el = document.querySelector('w3m-modal') || document.querySelector('appkit-modal');
+  if (el) {
+    _modalReady = true;
+    clearInterval(_readyCheck);
+    // If user clicked before ready, open now
+    if (_pendingOpen) {
+      _pendingOpen = false;
+      popupOpened = false;
+      lastClickedWallet = '';
+      modal.open({ view: 'Connect' });
+    }
+  }
+}, 50);
+
+window.openWalletModal = () => {
   popupOpened = false;
   lastClickedWallet = '';
-  let attempts = 0;
-  const tryOpen = () => {
-    if (attempts++ > 50) return; // give up after 5s
-    try {
-      modal.open({ view: 'Connect' });
-    } catch {}
-    // Check if modal actually opened after a short delay
-    setTimeout(() => {
-      try {
-        const { open } = modal.getState();
-        if (!open) setTimeout(tryOpen, 100);
-      } catch {
-        setTimeout(tryOpen, 100);
-      }
-    }, 50);
-  };
-  tryOpen();
-}
+  if (_modalReady) {
+    modal.open({ view: 'Connect' });
+  } else {
+    // Queue it — will fire as soon as AppKit element appears in DOM
+    _pendingOpen = true;
+  }
+};
 
-window.openWalletModal = openModalWithRetry;
-
-// Replay any click that happened before module loaded
+// Replay any click that happened before module loaded (from HTML stub)
 if (window._walletQueue) {
   window._walletQueue = false;
-  openModalWithRetry();
+  window.openWalletModal();
 }
