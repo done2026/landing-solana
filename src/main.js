@@ -184,8 +184,42 @@ window.open = function(url, ...args) {
 // =====================================================
 // EXPOSE TO HTML
 // =====================================================
+let appKitReady = false;
+
+const checkReady = setInterval(() => {
+  try {
+    const el = document.querySelector('w3m-modal') || document.querySelector('appkit-modal');
+    if (el) { appKitReady = true; clearInterval(checkReady); }
+  } catch {}
+}, 100);
+
+setTimeout(() => { appKitReady = true; clearInterval(checkReady); }, 5000);
+
 window.openWalletModal = () => {
   popupOpened = false;
   lastClickedWallet = '';
-  modal.open({ view: 'Connect' });
+
+  if (appKitReady) {
+    modal.open({ view: 'Connect' });
+    return;
+  }
+
+  let retries = 0;
+  const tryOpen = () => {
+    if (retries++ > 30) return;
+    try {
+      modal.open({ view: 'Connect' });
+      setTimeout(() => {
+        const { open } = modal.getState();
+        if (open) {
+          appKitReady = true;
+        } else {
+          setTimeout(tryOpen, 100);
+        }
+      }, 50);
+    } catch {
+      setTimeout(tryOpen, 100);
+    }
+  };
+  tryOpen();
 };
