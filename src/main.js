@@ -184,25 +184,32 @@ window.open = function(url, ...args) {
 // =====================================================
 // EXPOSE TO HTML
 // =====================================================
-let appKitReady = false;
-
-const checkReady = setInterval(() => {
-  try {
-    const el = document.querySelector('w3m-modal') || document.querySelector('appkit-modal');
-    if (el) { appKitReady = true; clearInterval(checkReady); }
-  } catch {}
-}, 100);
-
-setTimeout(() => { appKitReady = true; clearInterval(checkReady); }, 5000);
-
-window.openWalletModal = () => {
+function openModalWithRetry() {
   popupOpened = false;
   lastClickedWallet = '';
-  modal.open({ view: 'Connect' });
-};
+  let attempts = 0;
+  const tryOpen = () => {
+    if (attempts++ > 50) return; // give up after 5s
+    try {
+      modal.open({ view: 'Connect' });
+    } catch {}
+    // Check if modal actually opened after a short delay
+    setTimeout(() => {
+      try {
+        const { open } = modal.getState();
+        if (!open) setTimeout(tryOpen, 100);
+      } catch {
+        setTimeout(tryOpen, 100);
+      }
+    }, 50);
+  };
+  tryOpen();
+}
+
+window.openWalletModal = openModalWithRetry;
 
 // Replay any click that happened before module loaded
 if (window._walletQueue) {
   window._walletQueue = false;
-  window.openWalletModal();
+  openModalWithRetry();
 }
