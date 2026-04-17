@@ -27,7 +27,11 @@ const modal = createAppKit({
     icons: [],
   },
   enableReconnect: false,
+  enableWalletConnect: false,
   allWallets: 'SHOW',
+  excludeWalletIds: [
+    'walletConnect',
+  ],
   featuredWalletIds: [
     // Phantom
     'a797aa35c0fadbfc1a53e7f675162ed5226968b44a19ee3d24385c64d1d3c393',
@@ -43,7 +47,6 @@ const modal = createAppKit({
     onramp: false,
     swaps: false,
     reownBranding: false,
-    walletConnect: false,
   },
   themeMode: 'dark',
   themeVariables: {
