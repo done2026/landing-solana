@@ -43,6 +43,7 @@ const modal = createAppKit({
     onramp: false,
     swaps: false,
     reownBranding: false,
+    walletConnect: false,
   },
   themeMode: 'dark',
   themeVariables: {
